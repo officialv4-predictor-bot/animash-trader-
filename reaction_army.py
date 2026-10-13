@@ -1,30 +1,10 @@
-import os
 import telebot
 import time
 import random
 from telebot.types import ReactionTypeEmoji
-from flask import Flask
-from threading import Thread
-
-# --- Render Free Web Service ko 24/7 chalu rakhne ke liye ---
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Reaction Army is Running 24/7!"
-
-def run_web():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
-
-def keep_alive():
-    t = Thread(target=run_web)
-    t.daemon = True
-    t.start()
-# ------------------------------------------------------------
 
 CHANNEL_ID = '-1003174608918'
-ADMIN_ID = 8293930284
+ADMIN_ID = 8293930284 
 
 BOT_TOKENS = [
     '8772027820:AAHES2wr9xSAZU78dPgK_wHwyVwLxX-MY1I',
@@ -60,40 +40,33 @@ BOT_TOKENS = [
 ]
 
 listener_bot = telebot.TeleBot(BOT_TOKENS[0])
-processed_albums = set()
+# Yeh ek safety step hai taaki bot restart hote hi phasse nahi
+listener_bot.remove_webhook()
+time.sleep(1)
 
-def send_reactions(message_id):
+@listener_bot.channel_post_handler(func=lambda message: str(message.chat.id) == CHANNEL_ID)
+def auto_react(message):
+    
     emojis = ['⭐', '❤️', '👍', '🔥', '🥰', '😱', '👏', '💯', '⚡', '🏆', '😘', '🍾', '🙏', '🆒', '🎉']
+
     for index, token in enumerate(BOT_TOKENS):
         try:
             temp_bot = telebot.TeleBot(token.strip())
             reaction = ReactionTypeEmoji(random.choice(emojis))
-            temp_bot.set_message_reaction(CHANNEL_ID, message_id, [reaction])
-            time.sleep(1.5)
+            temp_bot.set_message_reaction(CHANNEL_ID, message.message_id, [reaction])
+            time.sleep(2) 
         except Exception as e:
-            pass
+            error_msg = f"❌ Bot Number {index + 1} fail ho gaya!\nWajah: {e}"
+            try:
+                listener_bot.send_message(ADMIN_ID, error_msg)
+            except:
+                pass
 
-# Text, Single Photo, 2+ Photos + Text (Album), Video sab par kaam karega
-@listener_bot.channel_post_handler(content_types=['text', 'photo', 'video', 'document', 'audio', 'voice', 'animation', 'sticker'])
-def auto_react(message):
-    if str(message.chat.id) != str(CHANNEL_ID):
-        return
+print("🚀 Error Tracker Wali Army Chalu Ho Gayi Hai...")
 
-    # Agar 2 ya zyada photo ek sath text laga kar bheji hain, toh us par ekdum sahi react karega
-    if message.media_group_id:
-        if message.media_group_id in processed_albums:
-            return
-        processed_albums.add(message.media_group_id)
-
-    Thread(target=send_reactions, args=(message.message_id,)).start()
-
-if __name__ == "__main__":
-    keep_alive()
-    listener_bot.remove_webhook()
-    time.sleep(3)
-    print("🚀 Reaction Army (Text + Photo + Video + Album) Chalu Ho Gayi Hai...")
-    while True:
-        try:
-            listener_bot.infinity_polling(allowed_updates=['channel_post'], skip_pending=True)
-        except Exception:
-            time.sleep(5)
+while True:
+    try:
+        # YAHAN THI SABSE BADI GALTI - Ise kabhi mat hatana
+        listener_bot.infinity_polling(allowed_updates=['channel_post'])
+    except Exception as e:
+        time.sleep(5)
